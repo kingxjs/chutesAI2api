@@ -76,6 +76,7 @@ func handleNonStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq 
 	mutable.Shuffle(cookies)
 
 	maxRetries := len(cookies)
+	forbiddenRetryCountMap := make(map[string]int)
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		cookie := cookies[attempt]
@@ -104,9 +105,39 @@ func handleNonStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq 
 		for response := range sseChan {
 
 			if response.Status == 403 {
-				logger.Errorf(ctx, "403 Forbidden")
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "403 Forbidden"})
-				return
+				// 获取当前 cookie 的重试次数，如果不存在则为 0
+				forbiddenRetryCount := forbiddenRetryCountMap[cookie]
+
+				// 最大允许的 403 重试次数
+				const maxForbiddenRetries = 5
+
+				// 检查是否已达到最大重试次数
+				if forbiddenRetryCount >= maxForbiddenRetries {
+					logger.Errorf(ctx, "Reached the maximum number of 403 retries (%d), cookie: %s", maxForbiddenRetries, cookie)
+					c.JSON(http.StatusForbidden, gin.H{"error": "403 Forbidden"})
+					return
+				}
+
+				// 增加重试计数
+				forbiddenRetryCount++
+				forbiddenRetryCountMap[cookie] = forbiddenRetryCount
+
+				logger.Warnf(ctx, "Received 403 Forbidden, retrying with the same cookie %d/%d: %s",
+					forbiddenRetryCount, maxForbiddenRetries, cookie)
+
+				// 使用相同的 cookie 重新发起请求
+				newSseChan, newErr := chutes_api.MakeStreamChatRequest(c, client, modelInfo.Id, jsonData, cookie)
+				if newErr != nil {
+					logger.Errorf(ctx, "403 Retry %d when MakeStreamChatRequest error: %v", forbiddenRetryCount, newErr)
+					return
+				}
+
+				// 替换当前的 SSE 通道
+				sseChan = newSseChan
+
+				// 重置标志位并继续处理新的 SSE 通道
+				isRateLimit = false
+				break
 			}
 
 			if response.Done {
@@ -303,6 +334,7 @@ func handleStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq mod
 	mutable.Shuffle(cookies)
 
 	maxRetries := len(cookies)
+	forbiddenRetryCountMap := make(map[string]int)
 
 	c.Stream(func(w io.Writer) bool {
 		for attempt := 0; attempt < maxRetries; attempt++ {
@@ -337,11 +369,40 @@ func handleStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq mod
 				}
 
 				if response.Status == 403 {
-					logger.Errorf(ctx, "403 Forbidden")
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "403 Forbidden"})
-					return false
-				}
+					// 获取当前 cookie 的重试次数，如果不存在则为 0
+					forbiddenRetryCount := forbiddenRetryCountMap[cookie]
 
+					// 最大允许的 403 重试次数
+					const maxForbiddenRetries = 5
+
+					// 检查是否已达到最大重试次数
+					if forbiddenRetryCount >= maxForbiddenRetries {
+						logger.Errorf(ctx, "Reached the maximum number of 403 retries (%d), cookie: %s", maxForbiddenRetries, cookie)
+						c.JSON(http.StatusForbidden, gin.H{"error": "403 Forbidden"})
+						return false
+					}
+
+					// 增加重试计数
+					forbiddenRetryCount++
+					forbiddenRetryCountMap[cookie] = forbiddenRetryCount
+
+					logger.Warnf(ctx, "Received 403 Forbidden, retrying with the same cookie %d/%d: %s",
+						forbiddenRetryCount, maxForbiddenRetries, cookie)
+
+					// 使用相同的 cookie 重新发起请求
+					newSseChan, newErr := chutes_api.MakeStreamChatRequest(c, client, modelInfo.Id, jsonData, cookie)
+					if newErr != nil {
+						logger.Errorf(ctx, "403 Retry %d when MakeStreamChatRequest error: %v", forbiddenRetryCount, newErr)
+						return false
+					}
+
+					// 替换当前的 SSE 通道
+					sseChan = newSseChan
+
+					// 重置标志位并继续处理新的 SSE 通道
+					isRateLimit = false
+					break SSELoop
+				}
 				if response.Done {
 					logger.Warnf(ctx, response.Data)
 					return false
