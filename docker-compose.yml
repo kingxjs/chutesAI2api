@@ -2,8 +2,9 @@ version: '3.4'
 
 services:
   chutesai2api:
-    image: deanxv/chutesai2api:latest
-    container_name: chutesai2api
+    build: .
+    # image: deanxv/chutesai2api:latest
+    container_name: chutesai2api_local
     restart: always
     ports:
       - "7011:7011"
@@ -11,3 +12,10 @@ services:
       - ./data:/app/chutesai2api/data
     environment:
       - TZ=Asia/Shanghai
+      # - DEBUG=true
+    networks:
+      - 1panel-network
+
+networks:
+  1panel-network:
+    external: true

@@ -5,10 +5,11 @@ import (
 	"chutesai2api/common/config"
 	logger "chutesai2api/common/loggger"
 	"fmt"
-	"github.com/deanxv/CycleTLS/cycletls"
-	"github.com/gin-gonic/gin"
 	"math/rand"
 	"mime/multipart"
+
+	"github.com/deanxv/CycleTLS/cycletls"
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -50,6 +51,7 @@ type MakeImageReq struct {
 	Width             string `json:"width" form:"width"`
 	Height            string `json:"height" form:"height"`
 	NumInferenceSteps string `json:"num_inference_steps" form:"num_inference_steps"`
+	Seed              string `json:"seed" form:"seed"`
 }
 
 func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData MakeImageReq, modelId string) (*cycletls.Response, error) {
@@ -58,6 +60,29 @@ func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData Make
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	boundary := "----WebKitFormBoundary" + generateRandomString(16)
+
+	// Set default values if not provided
+	// Check for required field
+	if requestData.Prompt == "" {
+		return nil, fmt.Errorf("prompt cannot be empty")
+	}
+
+	// Set default values if not provided
+	if requestData.Width == "" {
+		requestData.Width = "1024"
+	}
+	if requestData.Height == "" {
+		requestData.Height = "1024"
+	}
+	if requestData.Seed == "" {
+		requestData.Seed = "10001"
+	}
+	if requestData.GuidanceScale == "" {
+		requestData.GuidanceScale = "4"
+	}
+	if requestData.NumInferenceSteps == "" {
+		requestData.NumInferenceSteps = "20"
+	}
 
 	// 设置boundary，与原请求一致
 	writer.SetBoundary(boundary)
@@ -70,10 +95,11 @@ func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData Make
 		{"prompt", requestData.Prompt},
 		{"cord", "/generate"},
 		{"method", "POST"},
-		{"guidance_scale", "4"},
-		{"width", "1024"},
-		{"height", "1024"},
-		{"num_inference_steps", "20"},
+		{"guidance_scale", requestData.GuidanceScale},
+		{"width", requestData.Width},
+		{"height", requestData.Height},
+		{"num_inference_steps", requestData.NumInferenceSteps},
+		{"seed", requestData.Seed},
 	}
 
 	for _, field := range fields {

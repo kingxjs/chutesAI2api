@@ -156,6 +156,9 @@ type OpenAIImagesGenerationRequest struct {
 	Prompt         string `json:"prompt"`
 	ResponseFormat string `json:"response_format"`
 	Image          string `json:"image"`
+	Width          string `json:"width"`
+	Height         string `json:"height"`
+	Seed           string `json:"seed"`
 }
 
 type OpenAIImagesGenerationResponse struct {
@@ -164,7 +167,7 @@ type OpenAIImagesGenerationResponse struct {
 }
 
 type OpenAIImagesGenerationDataResponse struct {
-	//URL           string `json:"url"`
+	URL string `json:"url"`
 	//RevisedPrompt string `json:"revised_prompt"`
 	B64Json string `json:"b64_json"`
 }
@@ -206,6 +209,15 @@ type OpenaiModelResponse struct {
 type OpenaiModelListResponse struct {
 	Object string                `json:"object"`
 	Data   []OpenaiModelResponse `json:"data"`
+}
+
+// XinyewResponse 定义了图床API的响应结构
+type XinyewResponse struct {
+	Errno int `json:"errno"`
+	Data  struct {
+		URL string `json:"url"`
+	} `json:"data"`
+	Message string `json:"message"`
 }
 
 func (r *OpenAIChatCompletionRequest) GetUserContent() []string {

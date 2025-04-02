@@ -1,23 +1,30 @@
 package controller
 
 import (
+	"bytes"
 	"chutesai2api/chutes-api"
 	"chutesai2api/common"
 	"chutesai2api/common/config"
+	"chutesai2api/common/helper"
 	logger "chutesai2api/common/loggger"
 	"chutesai2api/model"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/deanxv/CycleTLS/cycletls"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/lo/mutable"
-	"io"
-	"net/http"
-	"strings"
-	"time"
 )
 
 const (
@@ -636,10 +643,14 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			Created: time.Now().Unix(),
 			Data:    make([]*model.OpenAIImagesGenerationDataResponse, 0, 1),
 		}
-
+		URL, err := UploadToXinyew(c, b64)
+		if err != nil {
+			logger.Errorf(ctx, "UploadToXinyew: %v", err)
+		}
 		// Process image URLs
 		dataResp := &model.OpenAIImagesGenerationDataResponse{
 			B64Json: b64,
+			URL:     URL,
 		}
 		result.Data = append(result.Data, dataResp)
 		return result, nil
@@ -653,9 +664,12 @@ func createImageRequestBody(c *gin.Context, openAIReq *model.OpenAIImagesGenerat
 
 	makeImageReq := chutes_api.MakeImageReq{
 		Prompt: openAIReq.Prompt,
+		Width:  openAIReq.Width,
+		Height: openAIReq.Height,
+		Seed:   openAIReq.Seed,
 	}
-
 	logger.Debug(c.Request.Context(), fmt.Sprintf("RequestBody: %v", makeImageReq))
+	logger.Debug(c.Request.Context(), fmt.Sprintf("openAIReq: %v", openAIReq))
 	return makeImageReq, nil
 
 }
@@ -695,4 +709,132 @@ func safeClose(client cycletls.CycleTLS) {
 	if client.RespChan != nil {
 		close(client.RespChan)
 	}
+}
+
+// UploadToXinyew 上传图片到新野图床并返回URL
+func UploadToXinyew(c *gin.Context, imageBase64 string) (string, error) {
+	// 生成随机文件名
+	filename := helper.GenRequestID()
+
+	logger.Debug(c.Request.Context(), fmt.Sprintf("Base64 data length: %d\n", len(imageBase64)))
+	logger.Debug(c.Request.Context(), fmt.Sprintf("Generated filename: %s\n", filename))
+
+	// 解码base64图片数据
+	var imageData []byte
+	var err error
+
+	if strings.Contains(imageBase64, ",") {
+		parts := strings.SplitN(imageBase64, ",", 2)
+		imageData, err = base64.StdEncoding.DecodeString(parts[1])
+	} else {
+		imageData, err = base64.StdEncoding.DecodeString(imageBase64)
+	}
+
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error decoding base64: %v\n", err))
+		return "", err
+	}
+
+	// 创建临时文件
+	tempFilePath := filepath.Join(os.TempDir(), filename)
+	err = ioutil.WriteFile(tempFilePath, imageData, 0644)
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error creating temp file: %v\n", err))
+		return "", err
+	}
+
+	// 确保临时文件会被删除
+	defer func() {
+		err := os.Remove(tempFilePath)
+		if err != nil {
+			logger.Errorf(c.Request.Context(), fmt.Sprintf("Error removing temp file: %v\n", err))
+		}
+	}()
+
+	// 准备文件上传
+	var requestBody bytes.Buffer
+	multipartWriter := multipart.NewWriter(&requestBody)
+
+	fileWriter, err := multipartWriter.CreateFormFile("file", filename)
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error creating form file: %v\n", err))
+		return "", err
+	}
+
+	// 打开临时文件
+	fileHandle, err := os.Open(tempFilePath)
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error opening temp file: %v\n", err))
+		return "", err
+	}
+	defer fileHandle.Close()
+
+	// 复制文件内容到请求体
+	_, err = io.Copy(fileWriter, fileHandle)
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error copying file to request: %v\n", err))
+		return "", err
+	}
+
+	// 关闭multipart writer
+	err = multipartWriter.Close()
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error closing multipart writer: %v\n", err))
+		return "", err
+	}
+
+	// 创建HTTP请求
+	logger.Debug(c.Request.Context(), fmt.Sprintf("Sending request to xinyew.cn..."))
+	req, err := http.NewRequest("POST", "https://api.xinyew.cn/api/jdtc", &requestBody)
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error creating request: %v\n", err))
+		return "", err
+	}
+
+	// 设置Content-Type
+	req.Header.Set("Content-Type", multipartWriter.FormDataContentType())
+
+	// 发送请求
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error sending request: %v\n", err))
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应内容
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		logger.Errorf(c.Request.Context(), fmt.Sprintf("Error reading response body: %v\n", err))
+		return "", err
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		var result model.XinyewResponse
+		err = json.Unmarshal(respBody, &result)
+		if err != nil {
+			logger.Errorf(c.Request.Context(), fmt.Sprintf("Error parsing JSON response: %v\n", err))
+			logger.Errorf(c.Request.Context(), fmt.Sprintf("Response content: %s\n", string(respBody)))
+			return "", err
+		}
+
+		logger.Debug(c.Request.Context(), fmt.Sprintf("Upload response: %+v\n", result))
+
+		if result.Errno == 0 {
+			url := result.Data.URL
+			if url != "" {
+				logger.Debug(c.Request.Context(), fmt.Sprintf("Successfully got image URL: %s\n", url))
+				return url, nil
+			}
+		}
+	} else {
+		logger.Debug(c.Request.Context(), fmt.Sprintf("Upload failed with status %d\n", resp.StatusCode))
+		logger.Debug(c.Request.Context(), fmt.Sprintf("Response content: %s\n", string(respBody)))
+	}
+
+	return "", fmt.Errorf("failed to upload image")
 }
