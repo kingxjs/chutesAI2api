@@ -102,6 +102,8 @@ func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData Make
 		{"seed", requestData.Seed},
 	}
 
+	logger.Debug(c.Request.Context(), fmt.Sprintf("MakeImageReq fields: %v", fields))
+
 	for _, field := range fields {
 		part, err := writer.CreateFormField(field.name)
 		if err != nil {
