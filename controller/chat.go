@@ -661,11 +661,22 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 }
 
 func createImageRequestBody(c *gin.Context, openAIReq *model.OpenAIImagesGenerationRequest) (chutes_api.MakeImageReq, error) {
-
+	width := "1024"
+	height := "1024"
+	if openAIReq.Size != "" {
+		// size 传值格式 1024x1024
+		if strings.Contains(openAIReq.Size, "x") {
+			parts := strings.Split(openAIReq.Size, "x")
+			if len(parts) == 2 {
+				width = parts[0]
+				height = parts[1]
+			}
+		}
+	}
 	makeImageReq := chutes_api.MakeImageReq{
 		Prompt: openAIReq.Prompt,
-		Width:  openAIReq.Width,
-		Height: openAIReq.Height,
+		Width:  width,
+		Height: height,
 		Seed:   openAIReq.Seed,
 	}
 	logger.Debug(c.Request.Context(), fmt.Sprintf("RequestBody: %v", makeImageReq))
