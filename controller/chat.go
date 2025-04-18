@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"chutesai2api/chutes-api"
 	"chutesai2api/common"
+	"chutesai2api/common/cloudflare"
 	"chutesai2api/common/config"
 	"chutesai2api/common/helper"
 	logger "chutesai2api/common/loggger"
@@ -607,6 +608,23 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 		switch {
 		case common.IsRateLimit(body):
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
+			continue
+		case common.IsCloudflareChallenge(data):
+			cfRes, err := cloudflare.HandleCloudflareChallenge(c, response.url)
+			if err != nil {
+				logger.Warnf(ctx, "CloudflareChallenge, cf:%s", cf)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
+				return
+			}
+			cf_clearance = cfRes.cookies.cf_clearance
+			if cf_clearance == "" {
+				logger.Warnf(ctx, "CloudflareChallenge, cf_clearance:%s", cf_clearance)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
+				return
+			}
+			// 向 cookies 中添加 cf_clearance
+			cookies = append(cookies, cf_clearance)
+			logger.Warnf(ctx, "CloudflareChallenge, cf_clearance:%s", cf_clearance)
 			continue
 		case common.IsNotLogin(body):
 			logger.Warnf(ctx, "Cookie Not Login, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)

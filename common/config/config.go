@@ -16,6 +16,10 @@ var ApiSecrets = strings.Split(os.Getenv("API_SECRET"), ",")
 // var DebugSQLEnabled = strings.ToLower(os.Getenv("DEBUG_SQL")) == "true"
 var ProxyUrl = env.String("PROXY_URL", "")
 
+// 过盾
+var RecaptchaProxyUrl = env.String("RECAPTCHA_PROXY_URL", "")
+var RecaptchaProxyClientKey = env.String("RECAPTCHA_PROXY_CLENT_KEY", "")
+
 //var ChatMaxDays = env.Int("CHAT_MAX_DAYS", -1)
 
 // 隐藏思考过程
