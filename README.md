@@ -73,6 +73,8 @@ _觉得有点意思的话 别忘了点个 ⭐_
 
 ```shell
 docker-compose pull && docker-compose up -d
+
+# 修改文件后 docker-compose down && docker-compose up -d -build
 ```
 
 #### docker-compose.yml

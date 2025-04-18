@@ -158,6 +158,7 @@ type OpenAIImagesGenerationRequest struct {
 	Image          string `json:"image"`
 	Size           string `json:"size"`
 	Seed           string `json:"seed"`
+	User           string `json:"user"`
 }
 
 type OpenAIImagesGenerationResponse struct {

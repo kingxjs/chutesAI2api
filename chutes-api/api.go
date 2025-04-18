@@ -119,6 +119,7 @@ func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData Make
 		Timeout: 10 * 60 * 60,
 		Method:  "POST",
 		URL:     "https://chutes.ai/app/api/invoke-image/" + modelId,
+		Proxy:   config.ProxyUrl, // 在每个请求中设置代理
 		Headers: map[string]string{
 			"accept":             "*/*",
 			"accept-language":    "zh-CN,zh;q=0.9,en;q=0.8",

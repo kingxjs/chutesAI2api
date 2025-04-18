@@ -673,11 +673,16 @@ func createImageRequestBody(c *gin.Context, openAIReq *model.OpenAIImagesGenerat
 			}
 		}
 	}
+	// 判断 Seed 没有值就使用 User
+	seed := openAIReq.Seed
+	if seed == "" && openAIReq.User != "" {
+		seed = openAIReq.User
+	}
 	makeImageReq := chutes_api.MakeImageReq{
 		Prompt: openAIReq.Prompt,
 		Width:  width,
 		Height: height,
-		Seed:   openAIReq.Seed,
+		Seed:   seed,
 	}
 	logger.Debug(c.Request.Context(), fmt.Sprintf("RequestBody: %v", makeImageReq))
 	logger.Debug(c.Request.Context(), fmt.Sprintf("openAIReq: %v", openAIReq))
