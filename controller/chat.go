@@ -649,7 +649,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 		case common.IsRateLimit(body):
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			continue
-		case common.IsCloudflareChallenge(data):
+		case common.IsCloudflareChallenge(body):
 			// c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
 			// return
 			// 修复: 使用正确的URL字段并接收map[string]interface{}类型的结果
