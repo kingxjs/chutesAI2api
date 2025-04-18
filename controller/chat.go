@@ -171,11 +171,13 @@ func handleNonStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq 
 				cf_clearance_item, err := common.HandleCloudflareChallenge(c.Request.Context(), "https://chutes.ai")
 				if err != nil {
 					logger.Warnf(c, "CloudflareChallenge failed: %s", err)
-					return nil, fmt.Errorf("cf challenge: %v", err)
+					isRateLimit = false
+					break
 				}
 				if cf_clearance_item == "" {
 					logger.Warnf(c, "CloudflareChallenge succeeded but cf_clearance not found")
-					return nil, fmt.Errorf("cf challenge: cf_clearance not found")
+					isRateLimit = false
+					break
 				}
 				isRateLimit = true
 				logger.Warnf(ctx, "cf_clearance,  attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
@@ -450,11 +452,13 @@ func handleStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq mod
 					cf_clearance_item, err := common.HandleCloudflareChallenge(c.Request.Context(), "https://chutes.ai")
 					if err != nil {
 						logger.Warnf(c, "CloudflareChallenge failed: %s", err)
-						return nil, fmt.Errorf("cf challenge: %v", err)
+						isRateLimit = false
+						break SSELoop // 使用 label 跳出 SSE 循环
 					}
 					if cf_clearance_item == "" {
 						logger.Warnf(c, "CloudflareChallenge succeeded but cf_clearance not found")
-						return nil, fmt.Errorf("cf challenge: cf_clearance not found")
+						isRateLimit = false
+						break SSELoop // 使用 label 跳出 SSE 循环
 					}
 
 					isRateLimit = true
@@ -643,6 +647,21 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 		switch {
 		case common.IsRateLimit(body):
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
+			continue
+		case common.IsCloudflareChallenge(data):
+			// c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
+			// return
+			// 修复: 使用正确的URL字段并接收map[string]interface{}类型的结果
+			cf_clearance_item, err := common.HandleCloudflareChallenge(c.Request.Context(), "https://chutes.ai")
+			if err != nil {
+				logger.Warnf(c, "CloudflareChallenge failed: %s", err)
+				return nil, err
+			}
+			if cf_clearance_item == "" {
+				logger.Warnf(c, "CloudflareChallenge succeeded but cf_clearance not found")
+				return nil, err
+			}
+			logger.Warnf(ctx, "cf_clearance,  attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			continue
 		case common.IsNotLogin(body):
 			logger.Warnf(ctx, "Cookie Not Login, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
