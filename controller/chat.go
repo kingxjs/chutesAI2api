@@ -609,7 +609,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 		case common.IsRateLimit(body):
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			continue
-		case common.IsCloudflareChallenge(data):
+		case common.IsCloudflareChallenge(body):
 			cfRes, err := cloudflare.HandleCloudflareChallenge(c, response.url)
 			if err != nil {
 				logger.Warnf(ctx, "CloudflareChallenge, cf:%s", cf)
