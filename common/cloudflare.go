@@ -247,7 +247,7 @@ func PollTaskResult(ctx context.Context, taskID string, clientKey string) (map[s
 
 // HandleCloudflareChallenge 处理 Cloudflare 挑战
 func HandleCloudflareChallenge(ctx context.Context, url string) (bool, error) {
-	logger.Debug(ctx, "Handling cloudflare challenge for URL: %s", url)
+	logger.Debug(ctx, "Handling cloudflare challenge for URL: "+url)
 
 	if config.RecaptchaProxyUrl == "" || config.RecaptchaProxyClientKey == "" {
 		return false, fmt.Errorf("Recaptcha proxy URL or client key is not set")
@@ -265,18 +265,18 @@ func HandleCloudflareChallenge(ctx context.Context, url string) (bool, error) {
 		return false, fmt.Errorf("failed to create task: %v", err)
 	}
 
-	logger.Debug(ctx, "Task created with ID: %s", taskInfo.TaskID)
+	logger.Debug(ctx, "Task created with ID: "+taskInfo.TaskID)
 
-	result, err := PollTaskResult(ctx, taskInfo.TaskID, clientKey)
+	result, err := PollTaskResult(ctx, taskInfo.TaskID, config.RecaptchaProxyClientKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to poll task result: %v", err)
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-	logger.Debug(ctx, "Challenge result: %s", string(resultJSON))
+	logger.Debug(ctx, "Challenge result: "+string(resultJSON))
 
 	success := VerifyCloudflareChallenge(ctx, result)
-	logger.Debug(ctx, "Challenge verification result: %t", success)
+	logger.Debug(ctx, "Challenge verification result: "+fmt.Sprintf("%t", success))
 
 	return success, nil
 }
