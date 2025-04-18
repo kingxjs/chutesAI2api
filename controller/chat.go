@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"chutesai2api/chutes-api"
 	"chutesai2api/common"
-	"chutesai2api/common/cloudflare"
 	"chutesai2api/common/config"
 	"chutesai2api/common/helper"
 	logger "chutesai2api/common/loggger"
