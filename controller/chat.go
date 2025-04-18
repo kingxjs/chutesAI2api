@@ -638,11 +638,12 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			return nil, err
 		}
 
-		body, err := chutes_api.MakeImageRequest(c, client, requestBody, modelInfo.Id, cookie)
+		response, err := chutes_api.MakeImageRequest(c, client, requestBody, modelInfo.Id, cookie)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to make image request: %v", err)
 			return nil, err
 		}
+		body := response.Body
 
 		switch {
 		case common.IsRateLimit(body):
