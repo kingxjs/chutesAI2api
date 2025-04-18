@@ -87,6 +87,10 @@ func handleNonStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq 
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		cookie := cookies[attempt]
+		currentCfClearance := common.GetCfClearance()
+		if currentCfClearance != "" {
+			cookie = currentCfClearance + ";" + cookie
+		}
 		requestBody, err := createRequestBody(c, &openAIReq, modelInfo, cookie)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -161,8 +165,21 @@ func handleNonStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq 
 
 			switch {
 			case common.IsCloudflareChallenge(data):
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
-				return
+				// c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
+				// return
+				// 修复: 使用正确的URL字段并接收map[string]interface{}类型的结果
+				cf_clearance_item, err := common.HandleCloudflareChallenge(c.Request.Context(), "https://chutes.ai")
+				if err != nil {
+					logger.Warnf(c, "CloudflareChallenge failed: %s", err)
+					return nil, fmt.Errorf("cf challenge: %v", err)
+				}
+				if cf_clearance_item == "" {
+					logger.Warnf(c, "CloudflareChallenge succeeded but cf_clearance not found")
+					return nil, fmt.Errorf("cf challenge: cf_clearance not found")
+				}
+				isRateLimit = true
+				logger.Warnf(ctx, "cf_clearance,  attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
+				break
 			case common.IsNotLogin(data):
 				isRateLimit = true
 				logger.Warnf(ctx, "Cookie Not Login, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
@@ -346,7 +363,10 @@ func handleStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq mod
 	c.Stream(func(w io.Writer) bool {
 		for attempt := 0; attempt < maxRetries; attempt++ {
 			cookie := cookies[attempt]
-
+			currentCfClearance := common.GetCfClearance()
+			if currentCfClearance != "" {
+				cookie = currentCfClearance + ";" + cookie
+			}
 			requestBody, err := createRequestBody(c, &openAIReq, modelInfo, cookie)
 			if err != nil {
 				c.JSON(500, gin.H{"error": err.Error()})
@@ -424,8 +444,22 @@ func handleStreamRequest(c *gin.Context, client cycletls.CycleTLS, openAIReq mod
 
 				switch {
 				case common.IsCloudflareChallenge(data):
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
-					return false
+					// c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
+					// return
+					// 修复: 使用正确的URL字段并接收map[string]interface{}类型的结果
+					cf_clearance_item, err := common.HandleCloudflareChallenge(c.Request.Context(), "https://chutes.ai")
+					if err != nil {
+						logger.Warnf(c, "CloudflareChallenge failed: %s", err)
+						return nil, fmt.Errorf("cf challenge: %v", err)
+					}
+					if cf_clearance_item == "" {
+						logger.Warnf(c, "CloudflareChallenge succeeded but cf_clearance not found")
+						return nil, fmt.Errorf("cf challenge: cf_clearance not found")
+					}
+
+					isRateLimit = true
+					logger.Warnf(ctx, "cf_clearance,  attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
+					break SSELoop // 使用 label 跳出 SSE 循环
 				case common.IsNotLogin(data):
 					isRateLimit = true
 					logger.Warnf(ctx, "Cookie Not Login, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
@@ -590,53 +624,25 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		cookie := cookies[attempt]
+		currentCfClearance := common.GetCfClearance()
+		if currentCfClearance != "" {
+			cookie = currentCfClearance + ";" + cookie
+		}
 		requestBody, err := createImageRequestBody(c, &openAIReq)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to create request body: %v", err)
 			return nil, err
 		}
 
-		response, err := chutes_api.MakeImageRequest(c, client, requestBody, modelInfo.Id)
+		body, err := chutes_api.MakeImageRequest(c, client, requestBody, modelInfo.Id, cookie)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to make image request: %v", err)
 			return nil, err
 		}
 
-		body := response.Body
-
 		switch {
 		case common.IsRateLimit(body):
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
-			continue
-		case common.IsCloudflareChallenge(body):
-			// 修复: 使用正确的URL字段并接收map[string]interface{}类型的结果
-			cfResult, err := common.HandleCloudflareChallenge(c.Request.Context(), "https://chutes.ai")
-			if err != nil {
-				logger.Warnf(ctx, "CloudflareChallenge failed: %s", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
-				return nil, fmt.Errorf("cf challenge: %v", err)
-			}
-
-			// 从结果中提取cf_clearance cookie
-			var cf_clearance string
-			if responseData, ok := cfResult["response"].(map[string]interface{}); ok {
-				if cookies, ok := responseData["cookies"].(map[string]interface{}); ok {
-					if clearance, ok := cookies["cf_clearance"].(string); ok {
-						cf_clearance = clearance
-					}
-				}
-			}
-
-			if cf_clearance == "" {
-				logger.Warnf(ctx, "CloudflareChallenge succeeded but cf_clearance not found")
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
-				return nil, fmt.Errorf("cf challenge: cf_clearance not found")
-			}
-
-			// 向 cookies 中添加 cf_clearance
-			cookies = append(cookies, cf_clearance)
-
-			logger.Warnf(ctx, "CloudflareChallenge succeeded, cf_clearance: %s", cf_clearance)
 			continue
 		case common.IsNotLogin(body):
 			logger.Warnf(ctx, "Cookie Not Login, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)

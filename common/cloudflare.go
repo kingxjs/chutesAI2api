@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,26 @@ type TaskResultRequest struct {
 type TaskResultResponse struct {
 	Status string      `json:"status"`
 	Result interface{} `json:"result,omitempty"`
+}
+
+// 使用互斥锁保护全局变量
+var (
+	cfClearance string
+	cfMutex     sync.RWMutex
+)
+
+// SetCfClearance 安全地设置 cf_clearance 值
+func SetCfClearance(value string) {
+	cfMutex.Lock()
+	defer cfMutex.Unlock()
+	cfClearance = value
+}
+
+// GetCfClearance 安全地获取 cf_clearance 值
+func GetCfClearance() string {
+	cfMutex.RLock()
+	defer cfMutex.RUnlock()
+	return cfClearance
 }
 
 // VerifyCloudflareChallenge 验证 Cloudflare 挑战结果
@@ -244,7 +265,7 @@ func PollTaskResult(ctx context.Context, taskID string, clientKey string) (map[s
 }
 
 // HandleCloudflareChallenge 处理 Cloudflare 挑战
-func HandleCloudflareChallenge(ctx context.Context, url string) (map[string]interface{}, error) {
+func HandleCloudflareChallenge(ctx context.Context, url string) (string, error) {
 	logger.Debug(ctx, "Handling cloudflare challenge for URL: "+url)
 
 	if config.RecaptchaProxyUrl == "" || config.RecaptchaProxyClientKey == "" {
@@ -275,6 +296,18 @@ func HandleCloudflareChallenge(ctx context.Context, url string) (map[string]inte
 
 	success := VerifyCloudflareChallenge(ctx, result)
 	logger.Debug(ctx, "Challenge verification result: "+fmt.Sprintf("%t", success))
+	var cf_clearance_value string
+	if responseData, ok := result["response"].(map[string]interface{}); ok {
+		if cookies, ok := responseData["cookies"].(map[string]interface{}); ok {
+			if clearance, ok := cookies["cf_clearance"].(string); ok {
+				cf_clearance_value = clearance
+			}
+		}
+	}
+	if cf_clearance_value != "" {
+		cookieValue := "cf_clearance=" + cf_clearance_value
+		SetCfClearance(cookieValue) // 安全地更新全局变量
+	}
 
-	return result, nil
+	return cf_clearance_value, nil
 }

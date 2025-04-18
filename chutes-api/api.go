@@ -30,8 +30,8 @@ func MakeStreamChatRequest(c *gin.Context, client cycletls.CycleTLS, modelId str
 			"Accept":       "text/event-stream",
 			"Origin":       baseURL,
 			"Referer":      baseURL + "/app/chute/" + modelId,
-			//"Cookie":       cookie,
-			"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome",
+			"Cookie":       cookie,
+			"User-Agent":   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome",
 		},
 	}
 
@@ -54,14 +54,12 @@ type MakeImageReq struct {
 	Seed              string `json:"seed" form:"seed"`
 }
 
-func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData MakeImageReq, modelId string) (*cycletls.Response, error) {
-
+func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData MakeImageReq, modelId string, cookie string) (*cycletls.Response, error) {
 	// 创建multipart请求体
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	boundary := "----WebKitFormBoundary" + generateRandomString(16)
 
-	// Set default values if not provided
 	// Check for required field
 	if requestData.Prompt == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
@@ -125,6 +123,7 @@ func MakeImageRequest(c *gin.Context, client cycletls.CycleTLS, requestData Make
 			"accept-language":    "zh-CN,zh;q=0.9,en;q=0.8",
 			"content-type":       writer.FormDataContentType(), // 自动包含正确boundary
 			"origin":             "https://chutes.ai",
+			"Cookie":             cookie,
 			"priority":           "u=1, i",
 			"referer":            "https://chutes.ai/app/chute/" + modelId,
 			"sec-ch-ua":          `"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"`,
