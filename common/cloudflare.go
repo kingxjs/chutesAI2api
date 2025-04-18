@@ -257,7 +257,7 @@ func HandleCloudflareChallenge(ctx context.Context, url string) (map[string]inte
 		ClientKey: config.RecaptchaProxyClientKey,
 		Type:      "CloudflareChallenge",
 		URL:       url,
-		UserAgent: "CFNetwork/897.15 Darwin/17.5.0 (iPhone/6s iOS/11.3)",
+		UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0",
 	}
 
 	taskInfo, err := CreateTask(ctx, data)

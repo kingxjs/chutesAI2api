@@ -610,7 +610,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			continue
 		case common.IsCloudflareChallenge(body):
 			// 修复: 使用正确的URL字段并接收map[string]interface{}类型的结果
-			cfResult, err := common.HandleCloudflareChallenge(c.Request.Context(), response.URL)
+			cfResult, err := common.HandleCloudflareChallenge(c.Request.Context(), "https://chutes.ai")
 			if err != nil {
 				logger.Warnf(ctx, "CloudflareChallenge failed: %s", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
@@ -619,6 +619,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 
 			// 从结果中提取cf_clearance cookie
 			var cf_clearance string
+			var ua string
 			if responseData, ok := cfResult["response"].(map[string]interface{}); ok {
 				if cookies, ok := responseData["cookies"].(map[string]interface{}); ok {
 					if clearance, ok := cookies["cf_clearance"].(string); ok {
@@ -626,6 +627,14 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 					}
 				}
 			}
+			if responseData, ok := cfResult["response"].(map[string]interface{}); ok {
+				if headers, ok := responseData["headers"].(map[string]interface{}); ok {
+					if clearance, ok := headers["User-Agent"].(string); ok {
+						ua = clearance
+					}
+				}
+			}
+
 
 			if cf_clearance == "" {
 				logger.Warnf(ctx, "CloudflareChallenge succeeded but cf_clearance not found")
@@ -635,6 +644,10 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 
 			// 向 cookies 中添加 cf_clearance
 			cookies = append(cookies, cf_clearance)
+			// 设置 User-Agent
+			if ua !- ""{
+				c.Request.Header.Set("User-Agent", ua)
+			}
 			logger.Warnf(ctx, "CloudflareChallenge succeeded, cf_clearance: %s", cf_clearance)
 			continue
 		case common.IsNotLogin(body):
