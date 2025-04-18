@@ -14,13 +14,11 @@ import (
 )
 
 type TaskRequest struct {
-	ClientKey string            `json:"clientKey"`
-	Type      string            `json:"type"`
-	URL       string            `json:"url"`
-	UserAgent string            `json:"userAgent"`
-	Proxy     string            `json:"proxy,omitempty"`
-	Cookies   map[string]string `json:"cookies,omitempty"`
-	Headers   map[string]string `json:"headers,omitempty"`
+	ClientKey string `json:"clientKey"`
+	Type      string `json:"type"`
+	URL       string `json:"url"`
+	UserAgent string `json:"userAgent"`
+	Proxy     string `json:"proxy,omitempty"`
 }
 
 type TaskResponse struct {
