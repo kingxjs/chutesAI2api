@@ -635,7 +635,6 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 				}
 			}
 
-
 			if cf_clearance == "" {
 				logger.Warnf(ctx, "CloudflareChallenge succeeded but cf_clearance not found")
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
@@ -645,7 +644,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			// 向 cookies 中添加 cf_clearance
 			cookies = append(cookies, cf_clearance)
 			// 设置 User-Agent
-			if ua !- ""{
+			if ua != "" {
 				c.Request.Header.Set("User-Agent", ua)
 			}
 			logger.Warnf(ctx, "CloudflareChallenge succeeded, cf_clearance: %s", cf_clearance)
