@@ -609,13 +609,13 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			continue
 		case common.IsCloudflareChallenge(body):
-			cfRes, err := cloudflare.HandleCloudflareChallenge(c, response.url)
+			cfRes, err := common.HandleCloudflareChallenge(c, response.url)
 			if err != nil {
 				logger.Warnf(ctx, "CloudflareChallenge, cf:%s", cf)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
 				return
 			}
-			cf_clearance = cfRes.cookies.cf_clearance
+			cf_clearance := cfRes.cookies.cf_clearance
 			if cf_clearance == "" {
 				logger.Warnf(ctx, "CloudflareChallenge, cf_clearance:%s", cf_clearance)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
