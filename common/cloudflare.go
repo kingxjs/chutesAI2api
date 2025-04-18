@@ -269,7 +269,7 @@ func HandleCloudflareChallenge(ctx context.Context, url string) (string, error) 
 	logger.Debug(ctx, "Handling cloudflare challenge for URL: "+url)
 
 	if config.RecaptchaProxyUrl == "" || config.RecaptchaProxyClientKey == "" {
-		return nil, fmt.Errorf("Recaptcha proxy URL or client key is not set")
+		return "", fmt.Errorf("Recaptcha proxy URL or client key is not set")
 	}
 
 	data := TaskRequest{
@@ -281,14 +281,14 @@ func HandleCloudflareChallenge(ctx context.Context, url string) (string, error) 
 
 	taskInfo, err := CreateTask(ctx, data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create task: %v", err)
+		return "", fmt.Errorf("failed to create task: %v", err)
 	}
 
 	logger.Debug(ctx, "Task created with ID: "+taskInfo.TaskID)
 
 	result, err := PollTaskResult(ctx, taskInfo.TaskID, config.RecaptchaProxyClientKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to poll task result: %v", err)
+		return "", fmt.Errorf("failed to poll task result: %v", err)
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
