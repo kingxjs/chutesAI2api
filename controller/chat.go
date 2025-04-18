@@ -609,21 +609,33 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			continue
 		case common.IsCloudflareChallenge(body):
-			cfRes, err := common.HandleCloudflareChallenge(c, response.url)
+			// 修复: 使用正确的URL字段并接收map[string]interface{}类型的结果
+			cfResult, err := common.HandleCloudflareChallenge(c.Request.Context(), response.URL)
 			if err != nil {
-				logger.Warnf(ctx, "CloudflareChallenge, cf:%s", cf)
+				logger.Warnf(ctx, "CloudflareChallenge failed: %s", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
-				return
+				return nil, fmt.Errorf("cf challenge: %v", err)
 			}
-			cf_clearance := cfRes.cookies.cf_clearance
+
+			// 从结果中提取cf_clearance cookie
+			var cf_clearance string
+			if responseData, ok := cfResult["response"].(map[string]interface{}); ok {
+				if cookies, ok := responseData["cookies"].(map[string]interface{}); ok {
+					if clearance, ok := cookies["cf_clearance"].(string); ok {
+						cf_clearance = clearance
+					}
+				}
+			}
+
 			if cf_clearance == "" {
-				logger.Warnf(ctx, "CloudflareChallenge, cf_clearance:%s", cf_clearance)
+				logger.Warnf(ctx, "CloudflareChallenge succeeded but cf_clearance not found")
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "cf challenge"})
-				return
+				return nil, fmt.Errorf("cf challenge: cf_clearance not found")
 			}
+
 			// 向 cookies 中添加 cf_clearance
 			cookies = append(cookies, cf_clearance)
-			logger.Warnf(ctx, "CloudflareChallenge, cf_clearance:%s", cf_clearance)
+			logger.Warnf(ctx, "CloudflareChallenge succeeded, cf_clearance: %s", cf_clearance)
 			continue
 		case common.IsNotLogin(body):
 			logger.Warnf(ctx, "Cookie Not Login, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
